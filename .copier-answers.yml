@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v4.3.6
+_src_path: https://github.com/jupyterlab/extension-template
+author_email: otso.kinanen@gmail.com
+author_name: Otso Kinanen
+has_binder: false
+has_settings: false
+kind: frontend
+labextension_name: q8s-extension
+project_short_description: A Jupyter extension communicating with qubernetes cluster.
+python_name: q8s_extension
+repository: ''
+test: true
+
