@@ -25,9 +25,12 @@ async function setupKernelComm(
   content: Widget
 ) {
   try {
-    console.log('Kernel Comm setup, from the row 29 in widget.ts:', kernel);
+    console.log(
+      'Kernel Comm setup, from the row 29 in widget.ts with comm target my_comm_target:',
+      kernel
+    );
     // Create new comm
-    const comm = kernel.createComm('echo');
+    const comm = kernel.createComm('my_comm_target'); // Updated target name
     console.log('Comm created:', comm);
     // Register message handler
     comm.onMsg = (msg: KernelMessage.ICommMsgMsg) => {

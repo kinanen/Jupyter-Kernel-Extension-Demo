@@ -18,7 +18,7 @@ class EchoKernel(Kernel):
         self.comm_manager = CommManager(parent=self, kernel=self)
         self.comm_manager.register_target('my_comm_target', self._handle_comm_open)
 
-    def _handle_comm_open(self, comm, msg):
+    def _handle_comm_open(self, comm, _):
         @comm.on_msg
         def _recv(msg):
             code = msg['content']['data']['code']
