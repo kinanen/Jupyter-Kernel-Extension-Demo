@@ -9,6 +9,9 @@ A Jupyter extension communicating with qubernetes cluster.
 - JupyterLab >= 4.0.0
 
 ## Install
+To install the echo kernel, for the comms execute:
+
+```jupyter kernelspec install ./echo_kernel --name echo```
 
 To install the extension, execute:
 

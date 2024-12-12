@@ -17,6 +17,22 @@ class EchoKernel(Kernel):
         super().__init__(**kwargs)
         self.comm_manager = CommManager(parent=self, kernel=self)
         self.comm_manager.register_target('my_comm_target', self._handle_comm_open)
+        self.comm_manager.register_target('my_comm_target', self.target_func)
+
+    def target_func(comm, msg):
+        # comm is the kernel Comm instance
+        # msg is the comm_open message
+
+        # Register handler for later messages
+        @comm.on_msg
+        def _recv(msg):
+            # Use msg['content']['data'] for the data in the message
+            print(msg['content']['data'])
+
+        # Send data to the frontend
+        comm.send({'foo': 5})
+
+
 
     def _handle_comm_open(self, comm, _):
         @comm.on_msg
