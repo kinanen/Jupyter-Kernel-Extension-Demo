@@ -16,6 +16,7 @@ class EchoKernel(Kernel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.comm_manager = CommManager(parent=self, kernel=self)
+        print('Comm manager initialision')
         self.comm_manager.register_target('my_comm_target', self._handle_comm_open)
         self.comm_manager.register_target('my_comm_target', self.target_func)
 
