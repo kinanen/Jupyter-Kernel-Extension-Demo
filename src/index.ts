@@ -5,7 +5,7 @@ import {
 
 import { ICommandPalette, MainAreaWidget } from '@jupyterlab/apputils';
 import { Widget } from '@lumino/widgets';
-import { qubetnetesControlPanel as qubernetesControlPanel } from './widget';
+import { createQ8SPanel as createQ8SPanel } from './widget';
 //import { Kernel } from '@jupyterlab/services';
 
 const plugin: JupyterFrontEndPlugin<void> = {
@@ -26,10 +26,10 @@ const plugin: JupyterFrontEndPlugin<void> = {
         if (!widget || widget.isDisposed) {
           // Get the current kernel
           const session = app.serviceManager.sessions.running().next().value;
-          const kernel = session?.kernel;
-          console.log('Current kernel, from the row 30 in index.ts:', kernel);
-          if (kernel) {
-            widget = qubernetesControlPanel(kernel);
+          //const kernel = session?.kernel;
+          console.log('Current session, from the row 30 in index.ts:', session);
+          if (session) {
+            widget = createQ8SPanel(session);
           } else {
             console.warn('No kernel available');
             return;
