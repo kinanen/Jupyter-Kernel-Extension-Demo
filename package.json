@@ -59,7 +59,8 @@
         "@jupyterlab/application": "^4.3.2",
         "@jupyterlab/apputils": "^4.4.2",
         "@jupyterlab/services": "^7.3.2",
-        "@lumino/widgets": "^2.5.0"
+        "@lumino/widgets": "^2.5.0",
+        "js-yaml": "^4.1.0"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.0.0",

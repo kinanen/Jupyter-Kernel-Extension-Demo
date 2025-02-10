@@ -1,5 +1,9 @@
 import { Widget } from '@lumino/widgets';
-import { MainAreaWidget, ISessionContext } from '@jupyterlab/apputils';
+import {
+  MainAreaWidget,
+  ISessionContext,
+  showDialog
+} from '@jupyterlab/apputils';
 import { KernelMessage, Kernel } from '@jupyterlab/services';
 import { ISignal, Signal } from '@lumino/signaling';
 
@@ -19,6 +23,7 @@ export class Q8SPanel extends Widget {
         label: 'Job Name',
         type: 'text',
         id: 'jobName',
+        name: 'jobName',
         value: 'Quantum-Job',
         required: true
       },
@@ -26,15 +31,25 @@ export class Q8SPanel extends Widget {
         label: 'Hardware Backend',
         type: 'select',
         id: 'hardwareBackend',
+        name: 'hardwareBackend',
         options: [
-          { value: 'QPU', text: 'QPU' },
-          { value: 'Single GPU', text: 'Single GPU' },
-          { value: 'Multi GPU(MPI)', text: 'Multi GPU(MPI)' },
-          { value: 'CPU', text: 'CPU' }
+          { value: 'q8s.com/qpu', text: 'QPU' },
+          { value: 'q8s.com/gpu', text: 'Single GPU' },
+          { value: 'q8s.com/gpu-mpi', text: 'Multi GPU (MPI)' },
+          { value: 'q8s.com/cpu', text: 'CPU' }
         ],
         required: true
       }
     ];
+
+    const gpuMpiField = {
+      label: 'Number of MPI Processes',
+      type: 'number',
+      id: 'gpuMpiCount',
+      name: 'gpuMpiCount',
+      value: '2', // default
+      required: false
+    };
 
     fields.forEach(field => {
       const div = document.createElement('div');
@@ -47,6 +62,7 @@ export class Q8SPanel extends Widget {
       if (field.type === 'select') {
         const select = document.createElement('select');
         select.id = field.id;
+        select.name = field.name;
         select.required = field.required || false;
 
         field.options?.forEach(option => {
@@ -58,10 +74,12 @@ export class Q8SPanel extends Widget {
 
         div.appendChild(label);
         div.appendChild(select);
+        form.appendChild(div);
       } else {
         const input = document.createElement('input');
         input.id = field.id;
         input.type = field.type;
+        input.name = field.name;
         if ('value' in field) {
           input.value = field.value as string;
         }
@@ -69,9 +87,41 @@ export class Q8SPanel extends Widget {
 
         div.appendChild(label);
         div.appendChild(input);
+        form.appendChild(div);
       }
+    });
 
-      form.appendChild(div);
+    // Create a hidden div for the GPU MPI field
+    const mpiDiv = document.createElement('div');
+    mpiDiv.className = 'form-group';
+    mpiDiv.style.display = 'none'; // initially hidden
+
+    const mpiLabel = document.createElement('label');
+    mpiLabel.htmlFor = gpuMpiField.id;
+    mpiLabel.textContent = gpuMpiField.label;
+
+    const mpiInput = document.createElement('input');
+    mpiInput.id = gpuMpiField.id;
+    mpiInput.type = gpuMpiField.type;
+    mpiInput.name = gpuMpiField.name;
+    mpiInput.value = gpuMpiField.value;
+    mpiInput.required = gpuMpiField.required || false;
+
+    mpiDiv.appendChild(mpiLabel);
+    mpiDiv.appendChild(mpiInput);
+    form.appendChild(mpiDiv);
+
+    // Listen for changes to hardwareBackend
+    const hardwareSelect = form.querySelector(
+      '#hardwareBackend'
+    ) as HTMLSelectElement;
+    hardwareSelect.addEventListener('change', () => {
+      // Show the MPI field only if "gpu-mpi" is selected
+      if (hardwareSelect.value === 'q8s.com/gpu-mpi') {
+        mpiDiv.style.display = 'block';
+      } else {
+        mpiDiv.style.display = 'none';
+      }
     });
 
     const submitButton = document.createElement('button');
@@ -100,52 +150,144 @@ export class Q8SPanel extends Widget {
   private viewJobSpec(form: HTMLFormElement): void {
     const formData = new FormData(form);
     const jobConfig = {
-      name: formData.get('jobName'),
-      backend: formData.get('hardwareBackend') as string
+      name: formData.get('jobName') as string,
+      backend:
+        formData.get('hardwareBackend') === 'q8s.com/gpu-mpi'
+          ? {
+              'q8s.com/gpu-mpi': parseInt(formData.get('gpuMpiCount') as string)
+            }
+          : (formData.get('hardwareBackend') as string)
     };
 
-    const jobSpec = {
+    console.log('Job config:', jobConfig);
+
+    // Original spec
+    const jobSpec = this.getJobSpec();
+    // A copy we'll modify
+    const newJobSpec = JSON.parse(JSON.stringify(jobSpec));
+
+    // Update the newJobSpec with user inputs
+    newJobSpec.metadata.name = jobConfig.name;
+    newJobSpec.spec.template.spec.containers[0].resources.limits =
+      jobConfig.backend;
+
+    console.log('New job spec:', newJobSpec);
+
+    // Build a diff element showing changes line by line
+    const diffElement = this.createJsonDiffView(jobSpec, newJobSpec);
+
+    showDialog({
+      title: 'Q8s job spec (diff)',
+      body: new Widget({ node: diffElement }),
+      host: document.body,
+      buttons: [
+        {
+          label: 'cancel',
+          caption: 'cancel changes to jobspec file for kernel',
+          className: 'my-button',
+          accept: true,
+          displayType: 'default',
+          ariaLabel: '',
+          iconClass: '',
+          iconLabel: '',
+          actions: []
+        },
+        {
+          label: 'submit changes',
+          caption: 'submit changes to jobspec file for kernel',
+          className: 'my-button',
+          accept: true,
+          displayType: 'default',
+          ariaLabel: '',
+          iconClass: '',
+          iconLabel: '',
+          actions: []
+        }
+      ],
+      defaultButton: 1,
+      hasClose: false
+    });
+  }
+
+  private createJsonDiffView(oldObj: any, newObj: any): HTMLElement {
+    const oldJson = JSON.stringify(oldObj, null, 2);
+    const newJson = JSON.stringify(newObj, null, 2);
+    const oldLines = oldJson.split('\n');
+    const newLines = newJson.split('\n');
+
+    console.log('Old JSON:', oldJson);
+    console.log('New JSON:', newJson);
+
+    const container = document.createElement('div');
+    container.className = 'diff-container'; // You can style this in CSS
+
+    const maxLength = Math.max(oldLines.length, newLines.length);
+    for (let i = 0; i < maxLength; i++) {
+      const oldLine = oldLines[i] ?? '';
+      const newLine = newLines[i] ?? '';
+
+      if (oldLine === newLine) {
+        const lineDiv = document.createElement('div');
+        lineDiv.style.whiteSpace = 'pre';
+        lineDiv.textContent = oldLine;
+        container.appendChild(lineDiv);
+      } else {
+        const diffDiv = document.createElement('div');
+        diffDiv.innerHTML =
+          `<span style="color:red; font-weight:bold; white-space:pre;">- ${oldLine}</span>\n` +
+          `<span style="color:green; white-space:pre;">+ ${newLine}</span>`;
+        container.appendChild(diffDiv);
+      }
+    }
+
+    return container;
+  }
+
+  //PLACE HOLDER, Needs to be implemented with a connection to the kernel, or by using a jobspec file
+  private getJobSpec(): any {
+    return {
       apiVersion: 'batch/v1',
       kind: 'Job',
       metadata: {
-        name: jobConfig.name
+        name: 'quantum-job'
       },
       spec: {
         template: {
           metadata: {
-            name: `${jobConfig.name}-pod`
+            name: 'quantum-job-pod'
           },
           spec: {
-            containers: [{
-              name: 'quantum-task',
-              image: 'q8s-registry/quantum-task:latest',
-              command: ['python', '/app/main.py'],
-              resources: {
-                limits: {
+            containers: [
+              {
+                name: 'quantum-task',
+                image: 'q8s-registry/quantum-task:latest',
+                command: ['python', '/app/main.py'],
+                resources: {
                   limits: {
-                    [jobConfig.backend === 'QPU' ? 'q8s.com/gpu' : jobConfig.backend === 'Single GPU' ? 'q8s.com/gpu' : jobConfig.backend === 'Multi GPU(MPI)' ? 'q8s.com/gpu' : 'q8s.com/cpu']: 1
+                    'q8s.com/gpu': 1
                   }
-                }
-              },
-              volumeMounts: [{
-                name: 'source-code-volume',
-                mountPath: '/app'
-              }]
-            }],
-            volumes: [{
-              name: 'source-code-volume',
-              configMap: {
-                name: 'task-files'
+                },
+                volumeMounts: [
+                  {
+                    name: 'source-code-volume',
+                    mountPath: '/app'
+                  }
+                ]
               }
-            }],
+            ],
+            volumes: [
+              {
+                name: 'source-code-volume',
+                configMap: {
+                  name: 'task-files'
+                }
+              }
+            ],
             restartPolicy: 'Never'
           }
         }
       }
     };
-
-    console.log('Job Specification:', JSON.stringify(jobSpec, null, 2));
-    // TODO: Display jobSpec in UI or send to kernel
   }
 
   //OUTDATED
