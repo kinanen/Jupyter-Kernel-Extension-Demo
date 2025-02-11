@@ -38,6 +38,8 @@ export class Q8SPanel extends Widget {
           { value: 'q8s.com/gpu-mpi', text: 'Multi GPU (MPI)' },
           { value: 'q8s.com/cpu', text: 'CPU' }
         ],
+        //needs to be edited to show current backend as default.
+        value: 'q8s.com/gpu',
         required: true
       }
     ];
@@ -115,12 +117,57 @@ export class Q8SPanel extends Widget {
     const hardwareSelect = form.querySelector(
       '#hardwareBackend'
     ) as HTMLSelectElement;
+
+    const qpuLink = document.createElement('a');
+    qpuLink.href = '#';
+    qpuLink.textContent = 'View QPU Info';
+    qpuLink.style.marginLeft = '1rem';
+
+    qpuLink.addEventListener('click', e => {
+      e.preventDefault();
+      showDialog({
+        title: 'QPU Information',
+        body: new Widget({
+          node: (() => {
+            const div = document.createElement('div');
+            const img = document.createElement('img');
+            img.src =
+              'https://cdn.prod.website-files.com/6523f13a748909d3e1bbb657/672b3f81dacde04b62361579_IQM-Crystal20-topology.png';
+            img.alt = 'QPU Information';
+            img.style.maxWidth = '100%';
+            div.appendChild(img);
+            return div;
+          })()
+        }),
+        buttons: [
+          {
+            label: 'Close',
+            accept: true,
+            caption: 'Close the dialog',
+            className: 'my-button',
+            displayType: 'default',
+            ariaLabel: 'Close button',
+            iconClass: '',
+            iconLabel: '',
+            actions: []
+          }
+        ]
+      });
+    });
+    qpuLink.style.display = 'none'; // initially hidden
+    hardwareSelect.parentElement?.appendChild(qpuLink);
+
     hardwareSelect.addEventListener('change', () => {
       // Show the MPI field only if "gpu-mpi" is selected
       if (hardwareSelect.value === 'q8s.com/gpu-mpi') {
         mpiDiv.style.display = 'block';
+        qpuLink.style.display = 'none';
+      } else if (hardwareSelect.value === 'q8s.com/qpu') {
+        mpiDiv.style.display = 'none';
+        qpuLink.style.display = 'inline';
       } else {
         mpiDiv.style.display = 'none';
+        qpuLink.style.display = 'none';
       }
     });
 
@@ -154,9 +201,12 @@ export class Q8SPanel extends Widget {
       backend:
         formData.get('hardwareBackend') === 'q8s.com/gpu-mpi'
           ? {
-              'q8s.com/gpu-mpi': parseInt(formData.get('gpuMpiCount') as string)
+              'q8s.com/gpu-mpi':
+                parseInt(formData.get('gpuMpiCount') as string) || 2
             }
-          : (formData.get('hardwareBackend') as string)
+          : {
+              [formData.get('hardwareBackend') as string]: 1
+            }
     };
 
     console.log('Job config:', jobConfig);
