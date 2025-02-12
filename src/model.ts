@@ -40,7 +40,11 @@ export class KernelModel {
   }
 
   execute(code: string): void {
+    console.log('Executing code:', code);
+    console.log('Session:', this._sessionContext);
+    console.log('Kernel:', this._sessionContext.session?.kernel);
     if (!this._sessionContext || !this._sessionContext.session?.kernel) {
+      console.warn('No kernel available');
       return;
     }
     this.future = this._sessionContext.session?.kernel?.requestExecute({

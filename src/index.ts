@@ -6,14 +6,19 @@ import {
 import { ICommandPalette, MainAreaWidget } from '@jupyterlab/apputils';
 import { Widget } from '@lumino/widgets';
 import { createQ8SPanel as createQ8SPanel } from './widget';
+import { ITranslator } from '@jupyterlab/translation';
 //import { Kernel } from '@jupyterlab/services';
 
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'q8s-extension',
   description: 'Control panel for qubernetes',
   autoStart: true,
-  requires: [ICommandPalette],
-  activate: (app: JupyterFrontEnd, palette: ICommandPalette) => {
+  requires: [ICommandPalette, ITranslator],
+  activate: (
+    app: JupyterFrontEnd,
+    palette: ICommandPalette,
+    translator: ITranslator
+  ) => {
     console.log('JupyterLab extension q8s-extension is activated!');
 
     let widget: MainAreaWidget<Widget>;
@@ -24,16 +29,13 @@ const plugin: JupyterFrontEndPlugin<void> = {
       label: 'Open Q8S Panel',
       execute: async () => {
         if (!widget || widget.isDisposed) {
-          // Get the current kernel
-          const session = app.serviceManager.sessions.running().next().value;
-          //const kernel = session?.kernel;
-          console.log('Current session, from the row 30 in index.ts:', session);
-          if (session) {
-            widget = createQ8SPanel(session);
-          } else {
-            console.warn('No kernel available');
-            return;
-          }
+          const manager = app.serviceManager;
+          // const trans = translator.load('jupyterlab');
+
+          widget = createQ8SPanel(manager, translator);
+        } else {
+          console.warn('No kernel available');
+          return;
         }
 
         if (!widget.isAttached) {

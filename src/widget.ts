@@ -2,16 +2,50 @@ import { Widget } from '@lumino/widgets';
 import {
   MainAreaWidget,
   ISessionContext,
-  showDialog
+  showDialog,
+  SessionContext,
+  SessionContextDialogs
 } from '@jupyterlab/apputils';
-import { KernelMessage, Kernel } from '@jupyterlab/services';
+import { ServiceManager, Kernel } from '@jupyterlab/services';
 import { ISignal, Signal } from '@lumino/signaling';
+import { KernelModel } from './model';
+import {
+  ITranslator,
+  nullTranslator,
+  TranslationBundle
+} from '@jupyterlab/translation';
 
 export class Q8SPanel extends Widget {
-  constructor(sessionContext: ISessionContext) {
+  constructor(manager: ServiceManager.IManager, translator?: ITranslator) {
     super();
-    this._sessionContext = sessionContext;
+    this._translator = translator || nullTranslator;
+    this._trans = this._translator.load('jupyterlab');
+    this._sessionContext = new SessionContext({
+      sessionManager: manager.sessions,
+      specsManager: manager.kernelspecs
+    });
+    this.title.label = this._trans.__('Q8S Panel');
+    this._model = new KernelModel(this._sessionContext);
+    // this._example = new KernelView(this._model);
+
     this.initializePanel();
+
+    this._sessionContextDialogs = new SessionContextDialogs({
+      translator: translator
+    });
+
+    void this._sessionContext
+      .initialize()
+      .then(async value => {
+        if (value) {
+          await this._sessionContextDialogs.selectKernel(this._sessionContext);
+        }
+      })
+      .catch(reason => {
+        console.error(
+          `Failed to initialize the session in ExamplePanel.\n${reason}`
+        );
+      });
   }
 
   private createJobForm(): HTMLFormElement {
@@ -342,97 +376,32 @@ export class Q8SPanel extends Widget {
 
   //OUTDATED
   private handleJobSubmission(form: HTMLFormElement): void {
-    const formData = new FormData(form);
-    const jobConfig = {
-      name: formData.get('jobName'),
-      gpuCount: parseInt(formData.get('gpuCount') as string)
-    };
+    this._model.execute('1+1');
 
-    if (this._comm) {
-      this._comm.send({
-        code: `submit_job(${JSON.stringify(jobConfig)})`
-      });
-    } else {
-      console.error('No communication channel available');
-    }
+    // Subscribe to kernel output changes
+    this._model.stateChanged.connect(() => {
+      if (this._model.output) {
+        console.log('Kernel output:', this._model.output);
+      }
+    });
   }
 
   private async initializePanel(): Promise<void> {
     console.log('Initializing Q8S Panel, session:', this._sessionContext);
+
+    // older code continues here
     this.node.textContent = 'Initializing Q8S Panel...';
     const form = this.createJobForm();
     this.node.textContent = '';
     this.node.appendChild(form);
-
-    try {
-      await this._sessionContext.ready;
-      await this.setupKernelComm();
-      await this.executeTest();
-    } catch (error) {
-      //console.error('Panel initialization failed:', error);
-      //this.node.textContent = 'Error: Failed to initialize panel';
-    }
-  }
-
-  private async setupKernelComm(): Promise<void> {
-    console.log('SessionContext:', this._sessionContext);
-    this._sessionContext.sessionChanged.connect((_, session) => {
-      console.log('Session initialized:', session);
-      console.log('Kernel:', this._sessionContext.session?.kernel);
-    });
-
-    // entering the following line, the following  prints end up 'undefined'
-    const kernel = this._sessionContext.session?.kernel;
-    console.log('Session:', this._sessionContext.session?.name);
-    console.log('Kernel:', this._sessionContext.session?.kernel);
-
-    if (!kernel) {
-      throw new Error('No kernel available');
-    }
-
-    try {
-      this._comm = kernel.createComm('my_comm_target');
-
-      this._comm.onMsg = (msg: KernelMessage.ICommMsgMsg) => {
-        const result = msg.content.data.result;
-        this.node.textContent = `Result: ${result}`;
-        this._resultChanged.emit(result);
-      };
-
-      this._comm.onClose = (msg: KernelMessage.ICommCloseMsg) => {
-        console.log('Comm channel closed:', msg);
-        this._comm = null;
-      };
-
-      this._comm.open();
-      this._comm.send({ code: '1+1' });
-    } catch (error) {
-      console.error('Comm setup failed:', error);
-      throw error;
-    }
-  }
-
-  private async executeTest(): Promise<void> {
-    const kernel = this._sessionContext.session?.kernel;
-    if (!kernel) {
-      throw new Error('No kernel available');
-    }
-
-    try {
-      const future = kernel.requestExecute({ code: '1+1' });
-      future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-        if (msg.header.msg_type === 'execute_result') {
-          console.log('Test result:', msg.content);
-        }
-      };
-    } catch (error) {
-      console.error('Test execution failed:', error);
-      throw error;
-    }
   }
 
   get resultChanged(): ISignal<this, any> {
     return this._resultChanged;
+  }
+
+  get session(): ISessionContext {
+    return this._sessionContext;
   }
 
   dispose(): void {
@@ -444,14 +413,20 @@ export class Q8SPanel extends Widget {
   }
 
   private _sessionContext: ISessionContext;
+  private _model: KernelModel;
   private _comm: Kernel.IComm | null = null;
   private _resultChanged = new Signal<this, any>(this);
+  private _sessionContextDialogs: SessionContextDialogs;
+
+  private _translator: ITranslator;
+  private _trans: TranslationBundle;
 }
 
 export function createQ8SPanel(
-  session: ISessionContext
+  manager: ServiceManager.IManager,
+  translator?: ITranslator
 ): MainAreaWidget<Q8SPanel> {
-  const content = new Q8SPanel(session);
+  const content = new Q8SPanel(manager, translator);
   const widget = new MainAreaWidget({ content });
 
   widget.id = 'q8s-extension';
